@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:grocery_admin_panel/consts/constants.dart';
+import 'package:grocery_admin_panel/responsive.dart';
+import 'package:grocery_admin_panel/services/utils.dart';
+import 'package:grocery_admin_panel/widgets/grid_products.dart';
 import 'package:grocery_admin_panel/widgets/header.dart';
+import 'package:grocery_admin_panel/widgets/products_widget.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/MenuController.dart' as menucontroller;
@@ -10,6 +14,7 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Size size = Utils(context).getScreenSize;
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(defaultPadding),
@@ -17,7 +22,9 @@ class DashboardScreen extends StatelessWidget {
           children: [
             Header(
               fct: () {
-                context.read<menucontroller.MenuController>().controlDashboarkMenu();
+                context
+                    .read<menucontroller.MenuController>()
+                    .controlDashboarkMenu();
               },
             ),
             const SizedBox(height: defaultPadding),
@@ -27,7 +34,17 @@ class DashboardScreen extends StatelessWidget {
                 Expanded(
                   flex: 5,
                   child: Column(
-                    children: const [
+                    children: [
+                      Responsive(
+                        mobile: ProductGrid(
+                          childAspectRatio:
+                              size.width < 650 && size.width > 350 ? 1.1 : 0.8,
+                          crossAxisCount: size.width < 650 ? 2 : 4,
+                        ),
+                        desktop: ProductGrid(
+                          childAspectRatio: size.width < 1400 ? 0.8 : 1.08,
+                        ),
+                      ),
                       // MyProductsHome(),
                       // SizedBox(height: defaultPadding),
                       // OrdersScreen(),

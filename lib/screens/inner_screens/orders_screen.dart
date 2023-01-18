@@ -43,6 +43,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 child: Column(
                   children: [
                     Header(
+                      title: 'All orders',
                       fct: () {
                         context
                             .read<menucontroller.MenuController>()

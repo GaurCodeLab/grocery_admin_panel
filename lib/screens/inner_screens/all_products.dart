@@ -41,12 +41,14 @@ class _AllProductsScreenState extends State<AllProductsScreen> {
                 child: Column(
                   children: [
                     Header(
+                      title: 'All products',
                       fct: () {
                         context
                             .read<menucontroller.MenuController>()
                             .controlProductsMenu();
                       },
                     ),
+                    const SizedBox(height: 25,),
                     Responsive(
                       mobile: ProductGrid(
                         childAspectRatio:

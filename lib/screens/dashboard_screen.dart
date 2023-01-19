@@ -61,7 +61,7 @@ class DashboardScreen extends StatelessWidget {
                       Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                              builder: (context) => const UploadProductForm()));
+                              builder: (context) => const UploadProductForm(),),);
                     },
                     text: 'Add product',
                     icon: Icons.add,

@@ -57,4 +57,45 @@ class GlobalMethods {
           );
         });
   }
+  static Future<void> errorDialog({
+    required String subtitle,
+    required BuildContext context,
+  }) async {
+    await showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
+            ),
+            title: Row(
+              children: const [
+                Icon(Icons.error, color: Colors.red,),
+                Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Text("An Error occured"),
+                ),
+              ],
+            ),
+            content: Text(
+              subtitle,
+              style: const TextStyle(fontSize: 18.0),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text(
+
+                  'ok',
+                  style: TextStyle(fontSize: 18.0, color: Colors.cyan),
+                ),
+              ),
+            ],
+          );
+        });
+  }
 }

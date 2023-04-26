@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:grocery_admin_panel/firebase_options.dart';
 import 'package:grocery_admin_panel/screens/inner_screens/add_product.dart';
+import 'package:grocery_admin_panel/screens/inner_screens/edit_products.dart';
 import 'package:grocery_admin_panel/screens/main_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -82,6 +83,7 @@ class _MyAppState extends State<MyApp> {
                   routes: {
                     UploadProductForm.routeName: (context) =>
                         const UploadProductForm(),
+
                   },
                 );
               },

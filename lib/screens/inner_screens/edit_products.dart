@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:grocery_admin_panel/responsive.dart';
 import 'package:grocery_admin_panel/screens/loading_manager.dart';
+import 'package:grocery_admin_panel/screens/main_screen.dart';
 import 'package:grocery_admin_panel/services/utils.dart';
 import 'package:grocery_admin_panel/controllers/MenuController.dart'
     as menucontroller;
@@ -16,35 +17,69 @@ import 'package:grocery_admin_panel/widgets/buttons.dart';
 import 'package:grocery_admin_panel/widgets/header.dart';
 import 'package:grocery_admin_panel/widgets/side_menu.dart';
 import 'package:grocery_admin_panel/widgets/text_widget.dart';
+import 'package:iconly/iconly.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../services/global_method.dart';
 
-class UploadProductForm extends StatefulWidget {
-  static const routeName = '/UploadProductForm';
+class EditProductScreen extends StatefulWidget {
+  static const routeName = '/EditProductScreen';
 
-  const UploadProductForm({Key? key}) : super(key: key);
+  const EditProductScreen(
+      {Key? key,
+      required this.id,
+      required this.title,
+      required this.price,
+      required this.productCat,
+      required this.imageUrl,
+      required this.isPiece,
+      required this.isOnSale,
+      required this.salePrice})
+      : super(key: key);
+
+  final String id, title, price, productCat, imageUrl;
+  final bool isPiece, isOnSale;
+  final double salePrice;
 
   @override
-  State<UploadProductForm> createState() => _UploadProductFormState();
+  State<EditProductScreen> createState() => _EditProductScreenState();
 }
 
-class _UploadProductFormState extends State<UploadProductForm> {
+class _EditProductScreenState extends State<EditProductScreen> {
   final _formkey = GlobalKey<FormState>();
-  String _catValue = 'Vegetables';
-  int _groupValue = 1;
-  bool isPiece = false;
+  late final TextEditingController _titleController,
+      _priceController; // title and price controllers
 
-  late final TextEditingController _titleController, _priceController;
+  late String _catValue;
+
+  String? _salePercent;
+  late String percToShow;
+  late double _salePrice;
+  late bool _isOnSale;
   File? _pickedImage;
-  Uint8List webImage = Uint8List(8);
+  Uint8List webImage = Uint8List(10);
+  late String _imageUrl;
+  late int val; // kg or piece
+
+  bool _isLoading = false;
+  late bool _isPiece;
 
   @override
   void initState() {
-    _priceController = TextEditingController();
-    _titleController = TextEditingController();
+    _priceController = TextEditingController(text: widget.price);
+    _titleController = TextEditingController(text: widget.title);
+    _salePrice = widget.salePrice;
+    _catValue = widget.productCat;
+    _isOnSale = widget.isOnSale;
+    _isPiece = widget.isPiece;
+    val = _isPiece ? 2 : 1;
+    _imageUrl = widget.imageUrl;
+    percToShow = (100 - (_salePrice * 100) / double.parse(widget.price))
+            .round()
+            .toStringAsFixed(1) +
+        '%';
     super.initState();
   }
 
@@ -58,9 +93,8 @@ class _UploadProductFormState extends State<UploadProductForm> {
   // void _uploadForm() async {
   //   final isValid = _formkey.currentState!.validate();
   // }
-  bool _isLoading = false;
 
-  void _uploadForm() async {
+  void _updateForm() async {
     final isValid = _formkey.currentState!.validate();
 
     FocusScope.of(context).unfocus();
@@ -68,38 +102,41 @@ class _UploadProductFormState extends State<UploadProductForm> {
 
     if (isValid) {
       _formkey.currentState!.save();
-      if(_pickedImage == null) {
-        GlobalMethods.errorDialog(subtitle: 'Please pick an image', context: context);
-        return;
-      }
-      final _uuid = const Uuid().v4();
+
       try {
+        String? imageUrl;
         setState(() {
           _isLoading = true;
         });
-        final ref = FirebaseStorage.instance.ref().child('productsImages').child('$_uuid.jpg');
-        if(kIsWeb){
-          await ref.putData(webImage);
-
-        }else {
-          await ref.putFile(_pickedImage!);
-
+        if (_pickedImage != null) {
+          final ref = FirebaseStorage.instance
+              .ref()
+              .child('productsImages')
+              .child('${widget.id}.jpg');
+          if (kIsWeb) {
+            await ref.putData(webImage);
+          } else {
+            await ref.putFile(_pickedImage!);
+          }
+          imageUrl = await ref.getDownloadURL();
         }
-        imageUrl = await ref.getDownloadURL();
-        await FirebaseFirestore.instance.collection('products').doc(_uuid).set({
-          'id': _uuid,
+
+        await FirebaseFirestore.instance
+            .collection('products')
+            .doc(widget.id)
+            .update({
           'title': _titleController.text,
           'price': _priceController.text,
-          'salePrice': 0.1,
-          'imageUrl': imageUrl,
+          'salePrice': _salePrice,
+          'imageUrl':
+              _pickedImage == null ? widget.imageUrl : imageUrl.toString(),
           'productCategoryName': _catValue,
-          'isOnSale': false,
-          'isPiece': isPiece,
-          'createdAt': Timestamp.now()
+          'isOnSale': _isOnSale,
+          'isPiece': _isPiece,
         });
-        _clearForm();
-        Fluttertoast.showToast(
-          msg: "Product uploaded succefully",
+
+        await Fluttertoast.showToast(
+          msg: "Product updated successfully",
           toastLength: Toast.LENGTH_LONG,
           gravity: ToastGravity.CENTER,
           timeInSecForIosWeb: 1,
@@ -124,8 +161,8 @@ class _UploadProductFormState extends State<UploadProductForm> {
   }
 
   void _clearForm() {
-    isPiece = false;
-    _groupValue = 1;
+    _isPiece = false;
+    val = 1;
     _priceController.clear();
     _titleController.clear();
     setState(() {
@@ -153,19 +190,19 @@ class _UploadProductFormState extends State<UploadProductForm> {
       ),
     );
     return Scaffold(
-      key: context
-          .read<menucontroller.MenuController>()
-          .getAddProductscaffoldKey,
+      // key: context
+      //     .read<menucontroller.MenuController>()
+      //     .getAddProductscaffoldKey,
       drawer: const SideMenu(),
       body: LoadingManager(
         isloading: _isLoading,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (Responsive.isDesktop(context))
-              const Expanded(
-                child: SideMenu(),
-              ),
+            // if (Responsive.isDesktop(context))
+            //   const Expanded(
+            //     child: SideMenu(),
+            //   ),
             Expanded(
               flex: 5,
               child: SingleChildScrollView(
@@ -174,14 +211,14 @@ class _UploadProductFormState extends State<UploadProductForm> {
                     const SizedBox(
                       height: 25,
                     ),
-                    Header(
-                        title: 'Add product',
-                        showTextField: false,
-                        fct: () {
-                          context
-                              .read<menucontroller.MenuController>()
-                              .controlAddProductsMenu();
-                        }),
+                    // Header(
+                    //     title: 'Add product',
+                    //     showTextField: false,
+                    //     fct: () {
+                    //       context
+                    //           .read<menucontroller.MenuController>()
+                    //           .controlAddProductsMenu();
+                    //     }),
                     const SizedBox(
                       height: 25,
                     ),
@@ -197,6 +234,40 @@ class _UploadProductFormState extends State<UploadProductForm> {
                           mainAxisAlignment: MainAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            InkWell(
+                              onTap: () {
+                                GlobalMethods.warningDialog(
+                                    title: 'Delete?',
+                                    subtitle: 'Confirm delete',
+                                    fct: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (context) =>
+                                                const MainScreen()),
+                                      );
+                                    },
+                                    context: context);
+                              },
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.close_outlined,
+                                    color: Colors.red,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(
+                                    width: 10,
+                                  ),
+                                  TextWidget(
+                                      text: 'Cancel update',
+                                      color: Colors.red.shade700),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(
+                              height: 10,
+                            ),
                             TextWidget(
                               text: 'Product title*',
                               color: color,
@@ -227,7 +298,8 @@ class _UploadProductFormState extends State<UploadProductForm> {
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.start,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.start,
                                       children: [
                                         TextWidget(
                                           text: 'Price in \u{20B9}',
@@ -241,7 +313,8 @@ class _UploadProductFormState extends State<UploadProductForm> {
                                           width: 100,
                                           child: TextFormField(
                                             controller: _priceController,
-                                            key: const ValueKey('Price \u{20B9}'),
+                                            key: const ValueKey(
+                                                'Price \u{20B9}'),
                                             keyboardType: TextInputType.number,
                                             validator: (value) {
                                               if (value!.isEmpty) {
@@ -250,7 +323,8 @@ class _UploadProductFormState extends State<UploadProductForm> {
                                               return null;
                                             },
                                             decoration: inputDecoration,
-                                            inputFormatters: <TextInputFormatter>[
+                                            inputFormatters: <
+                                                TextInputFormatter>[
                                               FilteringTextInputFormatter.allow(
                                                   RegExp(r'[0-9.]')),
                                             ],
@@ -281,14 +355,15 @@ class _UploadProductFormState extends State<UploadProductForm> {
                                         ),
                                         Row(
                                           children: [
-                                            TextWidget(text: 'kg', color: color),
+                                            TextWidget(
+                                                text: 'kg', color: color),
                                             Radio(
                                               value: 1,
-                                              groupValue: _groupValue,
+                                              groupValue: val,
                                               onChanged: (value) {
                                                 setState(() {
-                                                  _groupValue = 1;
-                                                  isPiece = false;
+                                                  val = 1;
+                                                  _isPiece = false;
                                                 });
                                               },
                                               activeColor: Colors.green,
@@ -297,17 +372,67 @@ class _UploadProductFormState extends State<UploadProductForm> {
                                                 text: 'piece', color: color),
                                             Radio(
                                               value: 2,
-                                              groupValue: _groupValue,
+                                              groupValue: val,
                                               onChanged: (value) {
                                                 setState(() {
-                                                  _groupValue = 2;
-                                                  isPiece = true;
+                                                  val = 2;
+                                                  _isPiece = true;
                                                 });
                                               },
                                               activeColor: Colors.green,
                                             ),
                                           ],
-                                        )
+                                        ),
+                                        const SizedBox(
+                                          height: 15,
+                                        ),
+                                        Row(
+                                          children: [
+                                            Checkbox(
+                                              value: _isOnSale,
+                                              onChanged: (newValue) {
+                                                setState(() {
+                                                  _isOnSale = newValue!;
+                                                });
+                                              },
+                                              activeColor: _isOnSale
+                                                  ? Colors.blue
+                                                  : Colors.white,
+                                              checkColor: Colors.white,
+                                            ),
+                                            const SizedBox(
+                                              width: 5,
+                                            ),
+                                            TextWidget(
+                                              text: 'Sale',
+                                              color: color,
+                                              isTitle: true,
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(
+                                          height: 5,
+                                        ),
+                                        AnimatedSwitcher(
+                                          duration: const Duration(seconds: 1),
+                                          child: !_isOnSale
+                                              ? Container()
+                                              : Row(
+                                                  children: [
+                                                    TextWidget(
+                                                        text: '\u{20B9}' +
+                                                            _salePrice
+                                                                .toStringAsFixed(
+                                                                    2),
+                                                        color: color),
+                                                    const SizedBox(
+                                                      width: 10,
+                                                    ),
+                                                    salePercentageDropDownWidget(
+                                                        color),
+                                                  ],
+                                                ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -327,7 +452,7 @@ class _UploadProductFormState extends State<UploadProductForm> {
                                               .scaffoldBackgroundColor,
                                         ),
                                         child: _pickedImage == null
-                                            ? dottedBorder()
+                                            ? Image.network(_imageUrl)
                                             : ClipRRect(
                                                 borderRadius:
                                                     BorderRadius.circular(12),
@@ -344,51 +469,31 @@ class _UploadProductFormState extends State<UploadProductForm> {
                                   ),
                                 ),
                                 Expanded(
-                                  child: FittedBox(
-                                    child: Column(
-                                      children: [
-                                        Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.delete_outlined,
-                                              color: Colors.red,
-                                              size: 24,
-                                            ),
-                                            TextButton(
-                                              onPressed: () {
-                                                setState(() {
-                                                  _pickedImage = null;
-                                                  webImage = Uint8List(8);
-                                                });
-                                              },
-                                              child: TextWidget(
-                                                text: 'Clear',
-                                                color: Colors.red,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(
-                                          height: 15,
-                                        ),
-                                        Row(
+                                  flex: 1,
+                                  child: Column(
+                                    children: [
+                                      FittedBox(
+                                        child: Row(
                                           children: [
                                             const Icon(
                                               Icons.edit_outlined,
-                                              color: Colors.red,
-                                              size: 24,
+                                              color: Colors.blue,
+                                              size: 28,
                                             ),
                                             TextButton(
-                                              onPressed: () {},
+                                              onPressed: () {
+                                                _pickImage();
+                                              },
                                               child: TextWidget(
                                                 text: 'Update image',
-                                                color: Colors.red,
+                                                color: Colors.blue,
+                                                isTitle: true,
                                               ),
                                             ),
                                           ],
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -396,20 +501,42 @@ class _UploadProductFormState extends State<UploadProductForm> {
                             Padding(
                               padding: const EdgeInsets.all(18.0),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceAround,
                                 children: [
                                   ButtonsWidget(
-                                    onPressed: _clearForm,
-                                    text: 'Clear form',
-                                    icon: Icons.warning_rounded,
-                                    backgroundColor: Colors.red.shade300,
+                                    onPressed: () async {
+                                      GlobalMethods.warningDialog(
+                                          title: 'Delete?',
+                                          subtitle: 'Confirm delete',
+                                          fct: () async {
+                                            await FirebaseFirestore.instance
+                                                .collection('products')
+                                                .doc(widget.id)
+                                                .delete();
+                                            await Fluttertoast.showToast(
+                                              msg: "Product has been deleted",
+                                              toastLength: Toast.LENGTH_LONG,
+                                              gravity: ToastGravity.CENTER,
+                                              timeInSecForIosWeb: 1,
+                                            );
+                                            while (Navigator.canPop(context)) {
+                                              Navigator.pop(context);
+                                            }
+                                          },
+                                          context: context);
+                                    },
+                                    text: 'Delete',
+                                    icon: IconlyBold.danger,
+                                    backgroundColor: Colors.red.shade700,
                                   ),
                                   ButtonsWidget(
                                     onPressed: () {
-                                      _uploadForm();
+                                      // _uploadForm();
+                                      _updateForm();
                                     },
-                                    text: 'Upload',
-                                    icon: Icons.upload_rounded,
+                                    text: 'Update',
+                                    icon: IconlyBold.setting,
                                     backgroundColor: Colors.blue,
                                   ),
                                 ],
@@ -503,7 +630,7 @@ class _UploadProductFormState extends State<UploadProductForm> {
           setState(() {
             _catValue = value!;
           });
-          print(_catValue);
+          // print(_catValue);
         },
         hint: const Text('Select a category'),
         items: const [
@@ -534,6 +661,53 @@ class _UploadProductFormState extends State<UploadProductForm> {
             value: 'Spices',
           ),
         ],
+      ),
+    );
+  }
+
+  DropdownButtonHideUnderline salePercentageDropDownWidget(Color color) {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        style: TextStyle(color: color),
+        items: const [
+          DropdownMenuItem<String>(
+            child: Text('10%'),
+            value: '10',
+          ),
+          DropdownMenuItem<String>(
+            child: Text('15%'),
+            value: '15',
+          ),
+          DropdownMenuItem<String>(
+            child: Text('25%'),
+            value: '25',
+          ),
+          DropdownMenuItem<String>(
+            child: Text('50%'),
+            value: '50',
+          ),
+          DropdownMenuItem<String>(
+            child: Text('75%'),
+            value: '75',
+          ),
+          DropdownMenuItem<String>(
+            child: Text('0%'),
+            value: '0',
+          ),
+        ],
+        onChanged: (value) {
+          if (value == '0') {
+            return;
+          } else {
+            setState(() {
+              _salePercent = value;
+              _salePrice = double.parse(widget.price) -
+                  (double.parse(value!) * double.parse(widget.price) / 100);
+            });
+          }
+        },
+        hint: Text(_salePercent ?? percToShow),
+        value: _salePercent,
       ),
     );
   }
